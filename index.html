@@ -1,0 +1,280 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101116">
+<title>Video Downloader</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101116;color:#f5f5f5;
+font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif}
+header{padding:22px 18px;background:#191a22;
+border-bottom:1px solid #30313b}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{background:#f33;color:white;border-radius:12px;
+padding:12px;font-size:23px;font-weight:bold}
+h1{font-size:21px;margin:0}
+.sub{font-size:12px;color:#aaa;margin-top:5px}
+main{max-width:650px;margin:auto;padding:18px}
+.card{background:#1b1c24;border:1px solid #30313b;
+border-radius:16px;padding:17px;margin-bottom:16px}
+h2{font-size:17px;margin:0 0 14px}
+p{color:#b7b8c3;font-size:14px;line-height:1.6}
+input,select{width:100%;padding:13px;margin:5px 0 12px;
+border-radius:10px;border:1px solid #41424d;background:#111218;
+color:white;font-size:15px}
+button,.button{display:inline-block;border:0;border-radius:10px;
+padding:12px 15px;background:#f33;color:white;font-size:14px;
+font-weight:600;cursor:pointer;text-decoration:none}
+.secondary{background:#30313c;color:white}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row button{flex:1}
+#player{width:100%;aspect-ratio:16/9;border:0;
+border-radius:12px;background:#08090d}
+.hidden{display:none}
+.item{padding:12px 0;border-bottom:1px solid #34343e;
+overflow-wrap:anywhere}
+.item:last-child{border-bottom:0}
+.small{font-size:12px;color:#aaa}
+nav{display:flex;gap:8px;margin-bottom:16px}
+nav button{flex:1;background:#282934}
+nav button.active{background:#f33}
+.notice{font-size:12px;color:#b8b8c5}
+footer{text-align:center;padding:20px;color:#858591;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">▶</div>
+    <div>
+      <h1>Video Downloader</h1>
+      <div class="sub">VIDEO TOOLS · GRATIS v0.1</div>
+    </div>
+  </div>
+</header>
+
+<main>
+<nav>
+<button class="active" data-tab="video">Video</button>
+<button data-tab="history">Riwayat</button>
+<button data-tab="downloads">Unduhan</button>
+</nav>
+
+<section id="video" class="panel">
+<div class="card">
+<h2>▶ Periksa video</h2>
+<label for="videoUrl">Tautan YouTube</label>
+<input id="videoUrl" type="url"
+placeholder="Tempel URL YouTube di sini">
+<div class="row">
+<button id="check">Tampilkan video</button>
+<button class="secondary" id="open">Buka sumber</button>
+</div>
+<div id="preview" class="hidden" style="margin-top:16px">
+<iframe id="player" title="Pratinjau video"
+allowfullscreen
+referrerpolicy="strict-origin-when-cross-origin"
+allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
+<p>Pratinjau menggunakan pemutar resmi YouTube.</p>
+</div>
+<p id="message" role="status">Tempel tautan video untuk memulai.</p>
+</div>
+
+<div class="card">
+<h2>⬇ Kelola file yang diizinkan</h2>
+<p>Untuk video milikmu atau file yang memang diizinkan pemiliknya, masukkan tautan langsung ke file video.</p>
+<label for="fileUrl">URL langsung file video</label>
+<input id="fileUrl" type="url" placeholder="https://situsmu.com/video.mp4">
+<label for="format">Format file</label>
+<select id="format">
+<option value="mp4">MP4 — jika tersedia dari sumber</option>
+<option value="webm">WebM — jika tersedia dari sumber</option>
+<option value="other">Format lain yang disediakan sumber</option>
+</select>
+<button id="addDownload">Tambahkan ke daftar unduhan</button>
+<p class="notice">Pilihan format di atas adalah preferensi, bukan deteksi format otomatis. Gunakan URL file langsung yang sah.</p>
+</div>
+</section>
+
+<section id="history" class="panel hidden">
+<div class="card">
+<h2>Riwayat video</h2>
+<div id="historyList"></div>
+<button id="clearHistory" class="secondary">Hapus riwayat</button>
+</div>
+</section>
+
+<section id="downloads" class="panel hidden">
+<div class="card">
+<h2>Daftar unduhan</h2>
+<div id="downloadList"></div>
+</div>
+</section>
+</main>
+
+<footer>
+Gunakan hanya konten yang kamu miliki atau yang diizinkan untuk diunduh.
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const read = (key, fallback) => {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; }
+  catch { return fallback; }
+};
+let historyItems = read("vd_history", []);
+let downloads = read("vd_downloads", []);
+
+function save() {
+  try {
+    localStorage.setItem("vd_history", JSON.stringify(historyItems));
+    localStorage.setItem("vd_downloads", JSON.stringify(downloads));
+  } catch {
+    $("message").textContent = "Penyimpanan browser penuh atau tidak tersedia.";
+  }
+}
+function validUrl(value) {
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch { return false; }
+}
+function youtubeId(value) {
+  try {
+    const u = new URL(value);
+    let id = "";
+    if (u.hostname === "youtu.be" ||
+        u.hostname.endsWith(".youtu.be")) {
+      id = u.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (/(^|\.)youtube\.com$/i.test(u.hostname)) {
+      if (u.pathname === "/watch") id = u.searchParams.get("v") || "";
+      else if (/^\/(embed|shorts|live)\/[^/]+/.test(u.pathname))
+        id = u.pathname.split("/")[2] || "";
+    }
+    return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : "";
+  } catch { return ""; }
+}
+function showHistory() {
+  $("historyList").innerHTML = "";
+  if (!historyItems.length) {
+    $("historyList").textContent = "Belum ada riwayat.";
+    return;
+  }
+  historyItems.forEach(item => {
+    const div = document.createElement("div");
+    div.className = "item";
+    const title = document.createElement("div");
+    title.textContent = item.url;
+    const btn = document.createElement("button");
+    btn.className = "secondary";
+    btn.textContent = "Buka";
+    btn.style.marginTop = "8px";
+    btn.onclick = () => {
+      $("videoUrl").value = item.url;
+      $("check").click();
+      document.querySelector('[data-tab="video"]').click();
+    };
+    div.append(title, btn);
+    $("historyList").append(div);
+  });
+}
+function showDownloads() {
+  $("downloadList").innerHTML = "";
+  if (!downloads.length) {
+    $("downloadList").textContent = "Belum ada file.";
+    return;
+  }
+  downloads.forEach((item, index) => {
+    const div = document.createElement("div");
+    div.className = "item";
+    const title = document.createElement("div");
+    title.textContent = item.url;
+    const note = document.createElement("p");
+    note.textContent = "Format pilihan: " + item.format +
+      ". Format aktual bergantung pada sumber.";
+    const link = document.createElement("a");
+    link.className = "button";
+    link.href = item.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Buka file";
+    const remove = document.createElement("button");
+    remove.className = "secondary";
+    remove.textContent = "Hapus";
+    remove.style.marginLeft = "8px";
+    remove.onclick = () => {
+      downloads.splice(index, 1);
+      save(); showDownloads();
+    };
+    div.append(title, note, link, remove);
+    $("downloadList").append(div);
+  });
+}
+$("check").onclick = () => {
+  const url = $("videoUrl").value.trim();
+  if (!validUrl(url)) {
+    $("message").textContent = "Masukkan URL HTTP atau HTTPS yang valid.";
+    return;
+  }
+  const id = youtubeId(url);
+  if (!id) {
+    $("message").textContent =
+      "URL ini belum dikenali sebagai tautan YouTube yang didukung.";
+    $("preview").classList.add("hidden");
+    return;
+  }
+  $("player").src = "https://www.youtube-nocookie.com/embed/" + id;
+  $("preview").classList.remove("hidden");
+  $("message").textContent =
+    "Video siap ditampilkan. Pengunduhan mengikuti izin dan fitur resmi sumber.";
+  historyItems = historyItems.filter(x => x.url !== url);
+  historyItems.unshift({url, time: Date.now()});
+  historyItems = historyItems.slice(0, 50);
+  save(); showHistory();
+};
+$("open").onclick = () => {
+  const url = $("videoUrl").value.trim();
+  if (!validUrl(url)) {
+    $("message").textContent = "Masukkan tautan yang valid dahulu.";
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+$("addDownload").onclick = () => {
+  const url = $("fileUrl").value.trim();
+  if (!validUrl(url)) {
+    alert("Masukkan URL file HTTP atau HTTPS yang valid.");
+    return;
+  }
+  if (youtubeId(url)) {
+    alert("Gunakan URL file langsung yang memang diizinkan, bukan URL halaman YouTube.");
+    return;
+  }
+  downloads.unshift({url, format: $("format").value});
+  save(); showDownloads();
+  $("fileUrl").value = "";
+  alert("File ditambahkan ke daftar. Tekan Buka file untuk mengakses sumber.");
+};
+$("clearHistory").onclick = () => {
+  if (confirm("Hapus semua riwayat video?")) {
+    historyItems = [];
+    save(); showHistory();
+  }
+};
+document.querySelectorAll("[data-tab]").forEach(button => {
+  button.onclick = () => {
+    document.querySelectorAll("[data-tab]").forEach(b =>
+      b.classList.toggle("active", b === button));
+    document.querySelectorAll(".panel").forEach(panel =>
+      panel.classList.toggle("hidden", panel.id !== button.dataset.tab));
+    showHistory(); showDownloads();
+  };
+});
+showHistory();
+showDownloads();
+</script>
+</body>
+</html>
